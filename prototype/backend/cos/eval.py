@@ -3,6 +3,7 @@ Tools for evaluation using cos
 """
 
 import itertools
+from typing import List
 import torch
 import torch.nn.functional as F
 from cos.core import apply_cos
@@ -48,7 +49,7 @@ def get_highest_lp_indices_causal_lm(model,
         # unsqueeze logits sizes to account for seqlen dimension
         logprobs = apply_cos(
             logits=logits_with_context.unsqueeze(1), 
-            logits_no_context=logits_no_context.unsqueeze(1), 
+            logits_nc=logits_no_context.unsqueeze(1), 
             temperature=temperature, 
             lambdas=lambdas,
             return_probs=False
@@ -133,7 +134,7 @@ def get_highest_lp_indices_seq2seq(model,
     # unsqueeze logits sizes to account for seqlen dimension
     logprobs = apply_cos(
         logits=logits_with_context.unsqueeze(1), 
-        logits_no_context=logits_no_context.unsqueeze(1), 
+        logits_nc=logits_no_context.unsqueeze(1), 
         temperature=temperature, 
         lambdas=lambdas, 
         return_probs=False

@@ -494,6 +494,173 @@ def get_cos_logprob_hf(
         'lambdas': repeated_lambdas
     }
 
+
+def get_multi_cos_logprob_hf(
+    model,
+    tokenizer,
+    prompts: List[str],
+    all_contexts: List[List[str]],
+    responses: List[str],
+    is_chat: bool = True,
+    all_lambdas: List[List[float]] = None,
+    temperature: float = 0.6,
+    max_batch_size: int = 8,
+    max_seq_len: int = 512,
+    put_context_first: bool = True,
+    show_progress: bool = True,
+):
+    if all_lambdas is None or len(all_lambdas) == 0:
+        raise ValueError("all_lambdas must be provided for multi-context logprob.")
+    if len(all_contexts) != len(all_lambdas):
+        raise ValueError("all_contexts and all_lambdas must have the same length.")
+
+    mbsz = max_batch_size
+    tokenize_chat = partial(
+        tokenizer.apply_chat_template,
+        tokenize=True,
+        return_tensors='pt',
+        padding=True,
+        return_dict=True
+    )
+    tokenize_text = partial(tokenizer, return_tensors="pt", padding=True)
+    get_tokens = tokenize_chat if is_chat else tokenize_text
+
+    if is_chat:
+        prompts_ctx, prompts_nc = get_multi_context_pair_dialogs(prompts, all_contexts, put_context_first)
+    else:
+        prompts_ctx, prompts_nc = get_multi_context_pair_texts(prompts, all_contexts, put_context_first)
+
+    num_lambdas = len(all_lambdas[0])
+    for lambdas in all_lambdas:
+        if len(lambdas) != num_lambdas:
+            raise ValueError("Each lambda list must be the same length.")
+
+    repeated_prompts_ctx = [tile_seqs(p, num_lambdas) for p in prompts_ctx]
+    repeated_prompts_nc = tile_seqs(prompts_nc, num_lambdas)
+    repeated_lambdas = [repeat_seqs(l, len(prompts)) for l in all_lambdas]
+    repeated_responses = tile_seqs(responses, num_lambdas)
+
+    if is_chat:
+        repeated_full_ctx = [
+            [p + [{'role': 'assistant', 'content': r}] for p, r in zip(rp, repeated_responses)]
+            for rp in repeated_prompts_ctx
+        ]
+        repeated_full_nc = [
+            p + [{'role': 'assistant', 'content': r}] for p, r in zip(repeated_prompts_nc, repeated_responses)
+        ]
+    else:
+        repeated_full_ctx = [
+            [f"{p} {r}" for p, r in zip(rp, repeated_responses)]
+            for rp in repeated_prompts_ctx
+        ]
+        repeated_full_nc = [f"{p} {r}" for p, r in zip(repeated_prompts_nc, repeated_responses)]
+
+    repeated_toks_prompts_nc = get_tokens(repeated_prompts_nc).to(model.device)
+    repeated_toks_full_nc = get_tokens(repeated_full_nc).to(model.device)
+    repeated_toks_full_ctx = [get_tokens(rf).to(model.device) for rf in repeated_full_ctx]
+
+    if show_progress:
+        pbar_batch = tqdm.tqdm(total=len(repeated_full_nc))
+
+    output_lps, output_total_lps = [], []
+    pad_id = tokenizer.pad_token_id
+    eos_id = tokenizer.eos_token_id
+    for i in range(0, len(repeated_full_nc), mbsz):
+        batch_prompt_masks = repeated_toks_prompts_nc.attention_mask[i: i + mbsz]
+        batch_full_ids_nc = repeated_toks_full_nc.input_ids[i: i + mbsz]
+        batch_full_masks_nc = repeated_toks_full_nc.attention_mask[i: i + mbsz]
+        all_batch_full_ids_ctx = [
+            rt.input_ids[i: i + mbsz] for rt in repeated_toks_full_ctx
+        ]
+        all_batch_full_masks_ctx = [
+            rt.attention_mask[i: i + mbsz] for rt in repeated_toks_full_ctx
+        ]
+        all_batch_lambdas = [
+            torch.tensor(repeated_lambdas[ci][i: i + mbsz], device=model.device)
+            for ci in range(len(repeated_lambdas))
+        ]
+
+        batch_res_len = batch_full_masks_nc.sum(dim=1) - batch_prompt_masks.sum(dim=1)
+        batch_num_pads = batch_res_len.max() - batch_res_len.min()
+        batch_full_ids_nc = F.pad(batch_full_ids_nc, (0, batch_num_pads), value=eos_id)
+        batch_full_masks_nc = F.pad(batch_full_masks_nc, (0, batch_num_pads), value=0)
+        n_cols = batch_full_ids_nc.size(1)
+        shifts = batch_res_len - batch_res_len.min()
+        rolled_indices = (torch.arange(n_cols, device=model.device).unsqueeze(0) - shifts.unsqueeze(1)) % n_cols
+        batch_full_ids_nc = batch_full_ids_nc.gather(1, rolled_indices)
+        batch_full_masks_nc = batch_full_masks_nc.gather(1, rolled_indices)
+        left_mask = torch.arange(n_cols, device=model.device).unsqueeze(0) < shifts.unsqueeze(1)
+        batch_full_ids_nc = torch.where(left_mask, pad_id, batch_full_ids_nc)
+        batch_full_masks_nc = torch.where(left_mask, 0, batch_full_masks_nc)
+
+        len_prompt = batch_full_ids_nc.shape[1] - batch_res_len.max()
+        is_prompt = torch.arange(batch_full_ids_nc.shape[1], device=model.device) < len_prompt
+        batch_resp_masks = torch.where(is_prompt[None, ], torch.zeros_like(batch_full_masks_nc), batch_full_masks_nc.bool())
+        batch_resp_mask_last = torch.roll(batch_resp_masks, shifts=-1, dims=1)
+
+        aligned_ctx_ids, aligned_ctx_masks = [], []
+        for batch_full_ids_ctx, batch_full_masks_ctx in zip(all_batch_full_ids_ctx, all_batch_full_masks_ctx):
+            batch_full_ids_ctx = F.pad(batch_full_ids_ctx, (0, max(0, n_cols - batch_full_ids_ctx.size(1))), value=eos_id)
+            batch_full_masks_ctx = F.pad(batch_full_masks_ctx, (0, max(0, n_cols - batch_full_masks_ctx.size(1))), value=0)
+            batch_full_ids_ctx = batch_full_ids_ctx.gather(1, rolled_indices)
+            batch_full_masks_ctx = batch_full_masks_ctx.gather(1, rolled_indices)
+            batch_full_ids_ctx = torch.where(left_mask, pad_id, batch_full_ids_ctx)
+            batch_full_masks_ctx = torch.where(left_mask, 0, batch_full_masks_ctx)
+            aligned_ctx_ids.append(batch_full_ids_ctx)
+            aligned_ctx_masks.append(batch_full_masks_ctx)
+
+        with torch.no_grad():
+            logits_nc = model(batch_full_ids_nc, batch_full_masks_nc, use_cache=False).logits
+        logits_nc = torch.log_softmax(logits_nc, dim=-1)
+        all_logits = []
+        for batch_full_ids_ctx, batch_full_masks_ctx in zip(aligned_ctx_ids, aligned_ctx_masks):
+            with torch.no_grad():
+                logits_ctx = model(batch_full_ids_ctx, batch_full_masks_ctx, use_cache=False).logits
+            logits_ctx = torch.log_softmax(logits_ctx, dim=-1)
+            all_logits.append(logits_ctx)
+
+        cos_probs = apply_multi_cos(
+            all_logits=all_logits,
+            logits_nc=logits_nc,
+            temperature=temperature,
+            all_lambdas=all_batch_lambdas,
+            mask=batch_resp_mask_last,
+            return_probs=True,
+            last_token=False
+        )
+        next_cos_lp = torch.roll(cos_probs, shifts=1, dims=1).log()
+        res_lp = torch.gather(next_cos_lp, -1, batch_full_ids_nc[..., None]).squeeze()
+        total_lp = torch.sum(res_lp, dim=-1)
+        output_lps.append(res_lp)
+        output_total_lps.append(total_lp)
+
+        if show_progress:
+            pbar_batch.update(min(mbsz, len(batch_full_ids_nc)))
+
+    max_len = max(t.shape[1] for t in output_lps)
+    output_lps = [
+        F.pad(t, (0, max_len - t.shape[1]), value=0) for t in output_lps
+    ]
+    output_lps = torch.cat(output_lps, dim=0)
+    output_total_lps = torch.cat(output_total_lps, dim=0)
+
+    if show_progress:
+        pbar_batch.close()
+
+    output = {
+        "logprobs": output_lps.cpu(),
+        "total_logprobs": output_total_lps.cpu(),
+        "prompts": repeated_prompts_nc,
+        "responses": repeated_responses,
+        "lambdas": repeated_lambdas,
+        "all_contexts": all_contexts,
+    }
+    if len(repeated_lambdas) >= 1:
+        output["lambdas_a"] = repeated_lambdas[0]
+    if len(repeated_lambdas) >= 2:
+        output["lambdas_b"] = repeated_lambdas[1]
+    return output
+
 def multi_contextual_steering_hf(
     model, 
     tokenizer,
