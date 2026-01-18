@@ -5,12 +5,12 @@
 - **Core idea**: Context Steering (CoS) compares next-token distributions with/without context and scales the difference by a tunable \(\lambda\).
 
 ## Repo layout
-- **Library code**: `cos/`
-  - **Key implementation**: `cos/core.py`
-  - **Utilities / prompt+context formatting**: `cos/utils.py`
-  - **Model path configuration**: `cos/model_paths.py`
+- **Library code (migrated)**: `prototype/backend/cos/`
+  - **Key implementation**: `prototype/backend/cos/core.py`
+  - **Utilities / prompt+context formatting**: `prototype/backend/cos/utils.py`
+  - **Model path configuration**: `prototype/backend/cos/model_paths.py`
 - **Notebooks (primary demos)**: `notebooks/` (e.g., `apply_cos.ipynb`, `context_steering.ipynb`)
-- **Tests**: `tests/` (note: may require large local HF model weights)
+- **Tests**: `prototype/backend/tests/` (note: may require large local HF model weights)
 
 ## Setup / install
 - **Python**: 3.10 (per README)
@@ -31,6 +31,7 @@
 ## Project conventions / preferences
 - **Absolute paths**: Prefer absolute paths when using Cursor tools in this workspace (per user environment note).
 - **Frontend stack for POC**: React + Tailwind + ShadCN UI.
+- **Logits extraction**: Avoid `model.generate(output_scores=True)` when you need raw next-token logits; use a forward pass (`prepare_inputs_for_generation` + `model(...)`) since `generate` scores are post-processed and may contain many `-inf`.
 
 ## Paper (parsed in `misc/paper.md`) → code grounding: what CoS is doing
 

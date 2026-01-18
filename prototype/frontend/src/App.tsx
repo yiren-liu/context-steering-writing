@@ -15,7 +15,7 @@ function clamp(value: number, min: number, max: number) {
 
 function App() {
   const apiBase =
-    (import.meta as ImportMeta).env.VITE_API_URL ?? "http://localhost:8000"
+    (import.meta as ImportMeta).env.VITE_API_URL ?? "http://localhost:8321"
   const padRef = useRef<HTMLDivElement | null>(null)
 
   const [userId, setUserId] = useState("demo-user")

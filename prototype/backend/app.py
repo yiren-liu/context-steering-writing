@@ -166,10 +166,12 @@ def generate_text(req: GenerateRequest) -> GenerateResponse:
 
 @app.post("/feedback", response_model=FeedbackResponse)
 def feedback(req: FeedbackRequest) -> FeedbackResponse:
+    # TODO (yiren): here we need to improve the search method to find the best lambda.
+    # Use gradient based search?
     state = _require_state()
     from cos.core import get_multi_cos_logprob_hf
 
-    lambdas = [round(x * 0.25, 2) for x in range(0, 13)]
+    lambdas = [round(x * 0.25, 2) for x in range(-13, 13)]
     scores = get_multi_cos_logprob_hf(
         model=state.model,
         tokenizer=state.tokenizer,

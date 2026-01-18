@@ -113,14 +113,16 @@ def get_seqs_logits(input_ids, mask, model, tokenizer, cache=None):
             attention_mask=mask, 
             max_new_tokens=1, 
             return_dict_in_generate=True, 
-            output_scores=True, 
+            # output_scores=True, 
+            output_logits=True, 
             pad_token_id=tokenizer.pad_token_id, 
             eos_token_id=tokenizer.eos_token_id, 
             past_key_values=cache, 
             use_cache=True
+            # do_sample=False,
         )
-    assert len(output.scores) == 1
-    logits = output.scores[0] # (batch_size, vocab_size ish)
+    assert len(output.logits) == 1
+    logits = output.logits[0] # (batch_size, vocab_size ish)
     assert logits.size(0) == len(input_ids)
     return logits
 
@@ -764,7 +766,7 @@ def multi_contextual_steering_hf(
             ) # (N, V)
             cos_logits = torch.log_softmax(cos_logits, dim=-1)
             if torch.any(torch.isnan(cos_logits)):
-                print(f"Lambdas {all_batch_lambdas[ci]} NaNs in cos_probs")
+                print(f"Lambdas {all_batch_lambdas} NaNs in cos_probs")
             cos_probs = torch.softmax(cos_logits, dim=-1)
             next_token = sample_top_p(cos_probs, top_p) # (N, 1)
             next_logprobs = torch.log(torch.gather(cos_probs, 1, next_token))

@@ -38,3 +38,26 @@ Rationale: `cos/core.py:apply_cos` defines the second argument as `logits_nc`; u
 # as the first action in each request, before any other tool call.
 ```
 
+### Mistake: Using `model.generate(output_scores=True)` to extract raw next-token logits
+**Wrong**:
+```
+output = model.generate(..., output_scores=True, return_dict_in_generate=True)
+logits = output.scores[0]  # may be full of -inf
+```
+
+**Correct**:
+```
+model_inputs = model.prepare_inputs_for_generation(
+    input_ids=input_ids,
+    attention_mask=attention_mask,
+    past_key_values=cache,
+    use_cache=True,
+)
+outputs = model(**model_inputs, return_dict=True, use_cache=True)
+logits = outputs.logits[:, -1, :]
+cache = outputs.past_key_values
+```
+
+Rationale: `generate(..., output_scores=True)` returns *processed* generation scores (after logits processors/warpers),
+which can legitimately set most/all tokens to `-inf` (e.g., forced tokens, suppression). For CoS/scoring we usually want
+the model’s raw distribution from a forward pass.

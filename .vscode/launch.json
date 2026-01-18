@@ -1,0 +1,53 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend (FastAPI)",
+      "type": "python",
+      "request": "launch",
+      "module": "uvicorn",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/prototype/backend",
+        "COS_MODEL_NAME": "llama-2-7b-chat",
+        "COS_IS_CHAT": "true"
+      },
+      "args": [
+        "prototype.backend.app:app",
+        "--reload",
+        "--port",
+        "8321"
+      ],
+      "justMyCode": true
+    },
+    {
+      "name": "Frontend (Vite Dev Server)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/prototype/frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Frontend (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/prototype/frontend/src"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Fullstack (Frontend + Backend)",
+      "configurations": [
+        "Backend (FastAPI)",
+        "Frontend (Vite Dev Server)",
+        "Frontend (Chrome)"
+      ]
+    }
+  ]
+}
