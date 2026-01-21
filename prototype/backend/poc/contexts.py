@@ -24,8 +24,16 @@ DEFAULT_CONTEXTS: List[StyleContext] = [
         instruction="Use clear structure; short paragraphs; explicit transitions.",
     ),
     StyleContext(
+        name="empathetic",
+        instruction="Write in a warm, empathetic tone; use first-person pronouns; show understanding.",
+    ),
+    StyleContext(
         name="vivid",
         instruction="Prefer concrete, vivid language; active voice; specific nouns/verbs.",
+    ),
+    StyleContext(
+        name="certainty",
+        instruction="Write with confidence; avoid hedging; make clear decisions.",
     ),
 ]
 

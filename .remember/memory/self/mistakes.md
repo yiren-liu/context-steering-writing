@@ -26,6 +26,18 @@ Rationale: `cos/core.py:apply_cos` defines the second argument as `logits_nc`; u
 # (including commas/whitespace), and re-apply.
 ```
 
+### Mistake: Calling `apply_patch` with an empty or invalid patch body
+**Wrong**:
+```
+# Issued an apply_patch call without any actual diff hunks.
+```
+
+**Correct**:
+```
+# Always include a valid V4A diff with at least one Add/Update hunk and
+# concrete +/- lines under an @@ context.
+```
+
 ### Mistake: Not reading memory files before taking the first action
 **Wrong**:
 ```

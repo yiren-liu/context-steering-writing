@@ -33,6 +33,8 @@
 - **Frontend stack for POC**: React + Tailwind + ShadCN UI.
 - **Logits extraction**: Avoid `model.generate(output_scores=True)` when you need raw next-token logits; use a forward pass (`prepare_inputs_for_generation` + `model(...)`) since `generate` scores are post-processed and may contain many `-inf`.
 - **LLM judge**: Use OpenAI models for judge evaluations.
+- **Secrets/config**: It’s OK to load `OPENAI_API_KEY` from a local `./.env` file (best-effort), in addition to standard environment variables.
+- **Edit dimensions (current)**: `empathy`, `vividness`, `certainty`
 
 ## Paper (parsed in `misc/paper.md`) → code grounding: what CoS is doing
 

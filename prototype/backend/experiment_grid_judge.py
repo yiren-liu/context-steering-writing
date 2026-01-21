@@ -300,7 +300,8 @@ def main() -> None:
         default="gpt-4o-mini",
         help="OpenAI model name for judging or HF model key if --judge_backend=local.",
     )
-    parser.add_argument("--dims", default="concise,formal,structured")
+    # parser.add_argument("--dims", default="concise,formal,structured")
+    parser.add_argument("--dims", default="empathetic,vivid,certainty")
     parser.add_argument("--slider_values", default="1,3,5,7")
     parser.add_argument("--n_prompts", type=int, default=3)
     parser.add_argument("--samples_per_setting", type=int, default=1)
@@ -333,23 +334,35 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=13)
     args = parser.parse_args()
 
-    judge_model = None
-    judge_tokenizer = None
-    judge_client = None
-    if args.judge_backend == "local":
-        judge_model, judge_tokenizer = load_hf_model_and_tokenizer(args.judge_model)
-    else:
-        try:
-            from openai import OpenAI
-        except ImportError as exc:
-            raise ImportError(
-                "openai package is required for --judge_backend=openai. "
-                "Install with `pip install openai` and set OPENAI_API_KEY."
-            ) from exc
-        judge_client = OpenAI()
+    # Best-effort load of local env vars (e.g., OPENAI_API_KEY) from ./.env.
+    # Keep this optional to avoid forcing an extra dependency in all environments.
+    try:
+        from dotenv import load_dotenv  # type: ignore
+    except Exception:
+        load_dotenv = None
+    if load_dotenv is not None:
+        load_dotenv()
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Only initialize judge resources if we will actually judge.
+    need_judging = args.judge_only or (not args.test_run)
+    judge_model = None
+    judge_tokenizer = None
+    judge_client = None
+    if need_judging:
+        if args.judge_backend == "local":
+            judge_model, judge_tokenizer = load_hf_model_and_tokenizer(args.judge_model)
+        else:
+            try:
+                from openai import OpenAI
+            except ImportError as exc:
+                raise ImportError(
+                    "openai package is required for --judge_backend=openai. "
+                    "Install with `pip install openai` and set OPENAI_API_KEY."
+                ) from exc
+            judge_client = OpenAI()
 
     if args.judge_only:
         if not args.input:
@@ -397,12 +410,14 @@ def main() -> None:
                     row["judge_baseline"] = judge_baseline
                     row["judge_cos"] = judge_cos
                     f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        print(f"Wrote results to {output_path}")
+        return
     else:
         if not args.data:
             raise ValueError("--data is required unless --judge_only is set.")
         random.seed(args.seed)
         examples = load_jsonl(args.data)
-        prompts = [ex.prompt for ex in examples if ex.prompt]
+        prompts = [f"Given the text: '{ex.before}'\n\n Instruction: '{ex.prompt}'\n\n Please write a response that satisfies the instruction." for ex in examples if ex.prompt and ex.before]
         if not prompts:
             raise ValueError("No prompts found in data. Provide non-empty prompt fields.")
         random.shuffle(prompts)
@@ -419,36 +434,49 @@ def main() -> None:
 
         model, tokenizer = load_hf_model_and_tokenizer(args.model)
 
-        with output_path.open("w", encoding="utf-8") as f:
-            for prompt in tqdm.tqdm(prompts, desc="Prompts"):
-                settings_iter = itertools.product(slider_values, repeat=len(dim_names))
-                grid_iter = settings_iter
+    with output_path.open("w", encoding="utf-8") as f:
+        for prompt in tqdm.tqdm(prompts, desc="Prompts"):
+            settings_iter = itertools.product(slider_values, repeat=len(dim_names))
+            if args.test_run:
+                settings_iter = itertools.islice(settings_iter, 3)
+            for dim_values in tqdm.tqdm(settings_iter, total=len(slider_values) ** len(dim_names), desc="Grid", leave=False):
+                dim_values = list(dim_values)
+                baseline_outputs = _generate_baseline(
+                    model,
+                    tokenizer,
+                    [prompt],
+                    dim_names,
+                    dim_values,
+                    samples_per_setting=args.samples_per_setting,
+                    max_new_tokens=args.max_new_tokens,
+                )
+                cos_outputs = _generate_cos(
+                    model,
+                    tokenizer,
+                    [prompt],
+                    dim_indices,
+                    dim_values,
+                    samples_per_setting=args.samples_per_setting,
+                    max_new_tokens=args.max_new_tokens,
+                )
+
                 if args.test_run:
-                    grid_iter = itertools.islice(settings_iter, 3)
-                for dim_values in tqdm.tqdm(
-                    grid_iter, total=len(slider_values) ** len(dim_names), desc="Grid", leave=False
-                ):
-                    dim_values = list(dim_values)
+                    # Still write outputs during test runs; we just skip judging.
+                    row = {
+                        "prompt": prompt,
+                        "dim_names": dim_names,
+                        "dim_instructions": dim_instructions,
+                        "dim_values": dim_values,
+                        "baseline_outputs": baseline_outputs,
+                        "cos_outputs": cos_outputs,
+                        "judge_skipped": True,
+                        "judge_backend": args.judge_backend,
+                        "judge_model": args.judge_model,
+                    }
+                    f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                    continue
 
-                    baseline_outputs = _generate_baseline(
-                        model,
-                        tokenizer,
-                        [prompt],
-                        dim_names,
-                        dim_values,
-                        samples_per_setting=args.samples_per_setting,
-                        max_new_tokens=args.max_new_tokens,
-                    )
-                    cos_outputs = _generate_cos(
-                        model,
-                        tokenizer,
-                        [prompt],
-                        dim_indices,
-                        dim_values,
-                        samples_per_setting=args.samples_per_setting,
-                        max_new_tokens=args.max_new_tokens,
-                    )
-
+                if not args.test_run:
                     with ThreadPoolExecutor(max_workers=args.judge_workers) as executor:
                         futures = []
                         for dim_name, dim_instruction in zip(dim_names, dim_instructions):
@@ -477,6 +505,7 @@ def main() -> None:
                                 err = str(exc)
                                 judge_baseline = {"raw": "", "parsed": None, "error": err, "attempts": 0}
                                 judge_cos = {"raw": "", "parsed": None, "error": err, "attempts": 0}
+                            # Write one row per dimension (the intended schema).
                             row = {
                                 "prompt": prompt,
                                 "dim_names": dim_names,
