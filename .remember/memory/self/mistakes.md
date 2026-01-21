@@ -61,3 +61,19 @@ cache = outputs.past_key_values
 Rationale: `generate(..., output_scores=True)` returns *processed* generation scores (after logits processors/warpers),
 which can legitimately set most/all tokens to `-inf` (e.g., forced tokens, suppression). For CoS/scoring we usually want
 the model’s raw distribution from a forward pass.
+
+### Mistake: 422 Unprocessable Entity caused by overly strict Pydantic constraints
+**Wrong**:
+```
+class GenerateRequest(BaseModel):
+    lambda_a: Optional[float] = Field(None, ge=0.0)  # rejects negative lambdas
+```
+
+**Correct**:
+```
+class GenerateRequest(BaseModel):
+    lambda_a: Optional[float] = Field(None, ge=-10.0, le=10.0)  # align with UI/model expectations
+```
+
+Rationale: FastAPI returns 422 when request-body validation fails; ensure backend schema constraints match the range your UI
+and inference logic actually produce (e.g., negative lambdas for context steering).

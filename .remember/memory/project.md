@@ -32,6 +32,7 @@
 - **Absolute paths**: Prefer absolute paths when using Cursor tools in this workspace (per user environment note).
 - **Frontend stack for POC**: React + Tailwind + ShadCN UI.
 - **Logits extraction**: Avoid `model.generate(output_scores=True)` when you need raw next-token logits; use a forward pass (`prepare_inputs_for_generation` + `model(...)`) since `generate` scores are post-processed and may contain many `-inf`.
+- **LLM judge**: Use OpenAI models for judge evaluations.
 
 ## Paper (parsed in `misc/paper.md`) → code grounding: what CoS is doing
 

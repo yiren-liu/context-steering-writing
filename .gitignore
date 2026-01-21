@@ -3,3 +3,6 @@
 .venv
 
 prototype/backend/models/
+.env
+
+outputs

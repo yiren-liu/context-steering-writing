@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
-const MIN_LAMBDA = 0
+const MIN_LAMBDA = -3
 const MAX_LAMBDA = 3
 
 function clamp(value: number, min: number, max: number) {
@@ -100,8 +100,8 @@ function App() {
       }
       const data = await res.json()
       const next = {
-        a: Number(data.inferred_lambda_a ?? lambdaA),
-        b: Number(data.inferred_lambda_b ?? lambdaB),
+        a: clamp(Number(data.inferred_lambda_a ?? lambdaA), MIN_LAMBDA, MAX_LAMBDA),
+        b: clamp(Number(data.inferred_lambda_b ?? lambdaB), MIN_LAMBDA, MAX_LAMBDA),
       }
       setInferred(next)
       setLambdaA(next.a)
@@ -188,12 +188,20 @@ function App() {
                     style={handlePosition}
                   />
                   <div className="pointer-events-none absolute inset-0 flex items-end justify-between px-2 pb-2 text-xs text-muted-foreground">
-                    <span>Low A</span>
-                    <span>High A</span>
+                    <span>
+                      {MIN_LAMBDA} (Low A)
+                    </span>
+                    <span>
+                      {MAX_LAMBDA} (High A)
+                    </span>
                   </div>
                   <div className="pointer-events-none absolute inset-0 flex flex-col items-start justify-between px-2 py-2 text-xs text-muted-foreground">
-                    <span>High B</span>
-                    <span>Low B</span>
+                    <span>
+                      {MAX_LAMBDA} (High B)
+                    </span>
+                    <span>
+                      {MIN_LAMBDA} (Low B)
+                    </span>
                   </div>
                 </div>
               </div>

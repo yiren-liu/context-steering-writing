@@ -14,6 +14,9 @@ from cos.utils import load_hf_model_and_tokenizer
 
 load_dotenv()
 
+LAMBDA_MIN = -10.0
+LAMBDA_MAX = 10.0
+
 
 @dataclass
 class AppState:
@@ -30,8 +33,8 @@ class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=1)
     style_a: str = Field(..., min_length=1)
     style_b: str = Field(..., min_length=1)
-    lambda_a: Optional[float] = Field(None, ge=0.0)
-    lambda_b: Optional[float] = Field(None, ge=0.0)
+    lambda_a: Optional[float] = Field(None, ge=LAMBDA_MIN, le=LAMBDA_MAX)
+    lambda_b: Optional[float] = Field(None, ge=LAMBDA_MIN, le=LAMBDA_MAX)
     max_gen_len: int = Field(256, ge=1, le=1024)
     temperature: float = Field(0.6, ge=0.1, le=2.0)
     top_p: float = Field(0.9, ge=0.1, le=1.0)
