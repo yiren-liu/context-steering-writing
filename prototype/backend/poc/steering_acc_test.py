@@ -7,7 +7,14 @@ try:
 except Exception:
     stats = None
 
-path = '/scratch/yirenl2/projects/context-steering-writing/outputs/grid_judge.jsonl'
+
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--input', type=str, required=True, help='Path to grid_judge.jsonl')
+args = parser.parse_args()
+
+path = args.input
 rows = []
 with open(path,'r',encoding='utf-8') as f:
     for line in f:
@@ -58,25 +65,89 @@ def pearson_and_p(xs, ys):
     p = stats.pearsonr(xs, ys).pvalue
     return r, p
 
-print('Method\tDimension\tN\tPearson\tp_value')
-for method in ['baseline','cos']:
-    for dim, ts in pairs[method].items():
-        xs = [t for t,_ in ts]
-        ys = [s for _,s in ts]
-        r, p = pearson_and_p(xs, ys)
-        p_str = f'{p:.3g}' if not math.isnan(p) else 'nan'
-        print(f'{method}\t{dim}\t{len(ts)}\t{r:.3f}\t{p_str}')
+def _fmt_nan(x, fmt):
+    if x is None or (isinstance(x, float) and math.isnan(x)):
+        return "nan"
+    return format(x, fmt)
 
-for method in ['baseline','cos']:
+
+def _fmt_p(p):
+    # Use 3 significant digits; switch to scientific when very small.
+    if p is None or (isinstance(p, float) and math.isnan(p)):
+        return "nan"
+    return f"{p:.3g}"
+
+
+table_rows = []
+for method in ["baseline", "cos"]:
+    for dim in sorted(pairs[method].keys()):
+        ts = pairs[method][dim]
+        xs = [t for t, _ in ts]
+        ys = [s for _, s in ts]
+        r, p = pearson_and_p(xs, ys)
+        table_rows.append(
+            {
+                "Method": method,
+                "Dimension": dim,
+                "N": str(len(ts)),
+                "Pearson": _fmt_nan(r, ".3f"),
+                "p_value": _fmt_p(p),
+            }
+        )
+
     all_ts = []
     all_scores = []
     for dim, ts in pairs[method].items():
-        for t,s in ts:
+        for t, s in ts:
             all_ts.append(t)
             all_scores.append(s)
     r, p = pearson_and_p(all_ts, all_scores)
-    p_str = f'{p:.3g}' if not math.isnan(p) else 'nan'
-    print(f'{method}\tALL\t{len(all_ts)}\t{r:.3f}\t{p_str}')
+    table_rows.append(
+        {
+            "Method": method,
+            "Dimension": "ALL",
+            "N": str(len(all_ts)),
+            "Pearson": _fmt_nan(r, ".3f"),
+            "p_value": _fmt_p(p),
+        }
+    )
+
+cols = ["Method", "Dimension", "N", "Pearson", "p_value"]
+widths = {c: len(c) for c in cols}
+for row in table_rows:
+    for c in cols:
+        widths[c] = max(widths[c], len(str(row.get(c, ""))))
+
+# Header
+header = (
+    f"{cols[0]:<{widths[cols[0]]}}  "
+    f"{cols[1]:<{widths[cols[1]]}}  "
+    f"{cols[2]:>{widths[cols[2]]}}  "
+    f"{cols[3]:>{widths[cols[3]]}}  "
+    f"{cols[4]:>{widths[cols[4]]}}"
+)
+print(header)
+print(
+    f"{'-' * widths[cols[0]]}  "
+    f"{'-' * widths[cols[1]]}  "
+    f"{'-' * widths[cols[2]]}  "
+    f"{'-' * widths[cols[3]]}  "
+    f"{'-' * widths[cols[4]]}"
+)
+
+prev_method = None
+for row in table_rows:
+    method = row["Method"]
+    if prev_method is not None and method != prev_method:
+        print("")  # visual break between methods
+    prev_method = method
+    print(
+        f"{row['Method']:<{widths['Method']}}  "
+        f"{row['Dimension']:<{widths['Dimension']}}  "
+        f"{row['N']:>{widths['N']}}  "
+        f"{row['Pearson']:>{widths['Pearson']}}  "
+        f"{row['p_value']:>{widths['p_value']}}"
+    )
 
 if stats is None:
     print('Note: scipy not available; p-values not computed.')

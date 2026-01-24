@@ -30,3 +30,5 @@ LLAMA_TOKENIZER_PATH = f'{root_path}/models/llama-2-tokenizer/tokenizer.model'
 HF_LLAMA_3_8B_TEXT_DIR = f'{root_path}/models/llama-3-8b-hf/'
 HF_LLAMA_3_8B_CHAT_DIR = f'{root_path}/models/llama-3-8b-chat-hf/'
 HF_LLAMA_3_TOKENIZER_PATH = f'{root_path}/models/llama-3-8b-hf/tokenizer.json'
+
+HF_LLAMA_4_SCOUT_17B_16E_INST_DIR = f'{root_path}/models/llama-4-scout-17b-16e-instruct-hf/'

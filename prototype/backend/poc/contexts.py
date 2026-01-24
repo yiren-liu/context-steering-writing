@@ -35,6 +35,14 @@ DEFAULT_CONTEXTS: List[StyleContext] = [
         name="certainty",
         instruction="Write with confidence; avoid hedging; make clear decisions.",
     ),
+    StyleContext(
+        name="polite",
+        instruction="Write in a polite, respectful tone; use please and thank you.",
+    ),
+    StyleContext(
+        name="positive",
+        instruction="Write in a positive, encouraging tone; use words like good, great, and wonderful.",
+    ),
 ]
 
 

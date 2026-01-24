@@ -20,8 +20,8 @@ class EditExample:
 def _normalize_record(raw: Dict[str, Any]) -> EditExample:
     before = raw.get("before") or raw.get("y_before") or raw.get("input_before")
     after = raw.get("after") or raw.get("y_after") or raw.get("input_after")
-    if before is None or after is None:
-        raise ValueError("Each JSONL record must have before/after text.")
+    # if before is None or after is None:
+    #     raise ValueError("Each JSONL record must have before/after text.")
 
     user_id = (
         raw.get("user_id")

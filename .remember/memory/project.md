@@ -35,6 +35,8 @@
 - **LLM judge**: Use OpenAI models for judge evaluations.
 - **Secrets/config**: It’s OK to load `OPENAI_API_KEY` from a local `./.env` file (best-effort), in addition to standard environment variables.
 - **Edit dimensions (current)**: `empathy`, `vividness`, `certainty`
+- **Edit dimensions (preference)**: Prefer “straightforward / easy-to-label” dimensions over abstract ones.
+- **Dataset**: Added `prototype/backend/data/edits_2.jsonl` (dimensions: `empathy`, `politeness`, `positivity`)
 
 ## Paper (parsed in `misc/paper.md`) → code grounding: what CoS is doing
 

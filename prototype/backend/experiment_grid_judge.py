@@ -301,7 +301,8 @@ def main() -> None:
         help="OpenAI model name for judging or HF model key if --judge_backend=local.",
     )
     # parser.add_argument("--dims", default="concise,formal,structured")
-    parser.add_argument("--dims", default="empathetic,vivid,certainty")
+    # parser.add_argument("--dims", default="empathetic,vivid,certainty")
+    parser.add_argument("--dims", default="empathetic,polite,positive")
     parser.add_argument("--slider_values", default="1,3,5,7")
     parser.add_argument("--n_prompts", type=int, default=3)
     parser.add_argument("--samples_per_setting", type=int, default=1)
@@ -417,7 +418,7 @@ def main() -> None:
             raise ValueError("--data is required unless --judge_only is set.")
         random.seed(args.seed)
         examples = load_jsonl(args.data)
-        prompts = [f"Given the text: '{ex.before}'\n\n Instruction: '{ex.prompt}'\n\n Please write a response that satisfies the instruction." for ex in examples if ex.prompt and ex.before]
+        prompts = [f"Instruction: '{ex.prompt}'\n\n Please write a response that satisfies the instruction." for ex in examples if ex.prompt and ex.before]
         if not prompts:
             raise ValueError("No prompts found in data. Provide non-empty prompt fields.")
         random.shuffle(prompts)
