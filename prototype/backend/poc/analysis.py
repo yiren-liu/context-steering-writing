@@ -50,7 +50,20 @@ def _pearson_and_p(xs, ys):
     return r, stats.pearsonr(xs, ys).pvalue
 
 
-def analyze(path: str) -> None:
+def _fmt_nan(x, fmt: str) -> str:
+    if x is None or (isinstance(x, float) and math.isnan(x)):
+        return "nan"
+    return format(x, fmt)
+
+
+def _fmt_p(p) -> str:
+    # Use 3 significant digits; switch to scientific when very small.
+    if p is None or (isinstance(p, float) and math.isnan(p)):
+        return "nan"
+    return f"{p:.3g}"
+
+
+def analyze(path: str, output_format: str = "table") -> None:
     rows = _load_rows(Path(path))
     pairs = {"baseline": defaultdict(list), "cos": defaultdict(list)}
 
@@ -76,25 +89,98 @@ def analyze(path: str) -> None:
                 continue
             pairs[method][dim].append((target, score))
 
-    print("Method\tDimension\tN\tPearson\tp_value")
-    for method in ["baseline", "cos"]:
-        for dim, ts in pairs[method].items():
-            xs = [t for t, _ in ts]
-            ys = [s for _, s in ts]
-            r, p = _pearson_and_p(xs, ys)
-            p_str = f"{p:.3g}" if not math.isnan(p) else "nan"
-            print(f"{method}\t{dim}\t{len(ts)}\t{r:.3f}\t{p_str}")
+    output_format = (output_format or "table").strip().lower()
+    if output_format not in {"table", "tsv"}:
+        raise ValueError("output_format must be one of: table, tsv")
 
-    for method in ["baseline", "cos"]:
-        all_ts = []
-        all_scores = []
-        for ts in pairs[method].values():
-            for t, s in ts:
-                all_ts.append(t)
-                all_scores.append(s)
-        r, p = _pearson_and_p(all_ts, all_scores)
-        p_str = f"{p:.3g}" if not math.isnan(p) else "nan"
-        print(f"{method}\tALL\t{len(all_ts)}\t{r:.3f}\t{p_str}")
+    if output_format == "tsv":
+        print("Method\tDimension\tN\tPearson\tp_value")
+        for method in ["baseline", "cos"]:
+            for dim, ts in pairs[method].items():
+                xs = [t for t, _ in ts]
+                ys = [s for _, s in ts]
+                r, p = _pearson_and_p(xs, ys)
+                print(f"{method}\t{dim}\t{len(ts)}\t{_fmt_nan(r, '.3f')}\t{_fmt_p(p)}")
+
+        for method in ["baseline", "cos"]:
+            all_ts = []
+            all_scores = []
+            for ts in pairs[method].values():
+                for t, s in ts:
+                    all_ts.append(t)
+                    all_scores.append(s)
+            r, p = _pearson_and_p(all_ts, all_scores)
+            print(f"{method}\tALL\t{len(all_ts)}\t{_fmt_nan(r, '.3f')}\t{_fmt_p(p)}")
+    else:
+        table_rows = []
+        for method in ["baseline", "cos"]:
+            for dim in sorted(pairs[method].keys()):
+                ts = pairs[method][dim]
+                xs = [t for t, _ in ts]
+                ys = [s for _, s in ts]
+                r, p = _pearson_and_p(xs, ys)
+                table_rows.append(
+                    {
+                        "Method": method,
+                        "Dimension": dim,
+                        "N": str(len(ts)),
+                        "Pearson": _fmt_nan(r, ".3f"),
+                        "p_value": _fmt_p(p),
+                    }
+                )
+
+            all_ts = []
+            all_scores = []
+            for ts in pairs[method].values():
+                for t, s in ts:
+                    all_ts.append(t)
+                    all_scores.append(s)
+            r, p = _pearson_and_p(all_ts, all_scores)
+            table_rows.append(
+                {
+                    "Method": method,
+                    "Dimension": "ALL",
+                    "N": str(len(all_ts)),
+                    "Pearson": _fmt_nan(r, ".3f"),
+                    "p_value": _fmt_p(p),
+                }
+            )
+
+        cols = ["Method", "Dimension", "N", "Pearson", "p_value"]
+        widths = {c: len(c) for c in cols}
+        for row in table_rows:
+            for c in cols:
+                widths[c] = max(widths[c], len(str(row.get(c, ""))))
+
+        header = (
+            f"{cols[0]:<{widths[cols[0]]}}  "
+            f"{cols[1]:<{widths[cols[1]]}}  "
+            f"{cols[2]:>{widths[cols[2]]}}  "
+            f"{cols[3]:>{widths[cols[3]]}}  "
+            f"{cols[4]:>{widths[cols[4]]}}"
+        )
+        print(header)
+        print(
+            f"{'-' * widths[cols[0]]}  "
+            f"{'-' * widths[cols[1]]}  "
+            f"{'-' * widths[cols[2]]}  "
+            f"{'-' * widths[cols[3]]}  "
+            f"{'-' * widths[cols[4]]}"
+        )
+
+        prev_method = None
+        for row in table_rows:
+            method = row["Method"]
+            if prev_method is not None and method != prev_method:
+                print("")  # visual break between methods
+            prev_method = method
+            print(
+                f"{row['Method']:<{widths['Method']}}  "
+                f"{row['Dimension']:<{widths['Dimension']}}  "
+                f"{row['N']:>{widths['N']}}  "
+                f"{row['Pearson']:>{widths['Pearson']}}  "
+                f"{row['p_value']:>{widths['p_value']}}"
+            )
 
     if stats is None:
         print("Note: scipy not available; p-values not computed.")
@@ -261,6 +347,12 @@ def main() -> None:
         help="Path to grid_judge.jsonl",
     )
     parser.add_argument(
+        "--format",
+        default="table",
+        choices=["table", "tsv"],
+        help="Correlation output format for the non-decoupling analysis.",
+    )
+    parser.add_argument(
         "--decoupling",
         action="store_true",
         help="Run decoupling analysis (slopes, R2, partial correlations).",
@@ -277,7 +369,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    analyze(args.input)
+    analyze(args.input, output_format=args.format)
     if args.decoupling:
         heatmap_path = args.heatmap or None
         analyze_decoupling(args.input, heatmap_path=heatmap_path, heatmap_metric=args.heatmap_metric)

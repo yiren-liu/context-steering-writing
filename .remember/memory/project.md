@@ -11,6 +11,7 @@
   - **Model path configuration**: `prototype/backend/cos/model_paths.py`
 - **Notebooks (primary demos)**: `notebooks/` (e.g., `apply_cos.ipynb`, `context_steering.ipynb`)
 - **Tests**: `prototype/backend/tests/` (note: may require large local HF model weights)
+- **Analysis scripts (POC)**: `prototype/backend/poc/analysis.py` (canonical; includes correlations + optional decoupling + heatmap)
 
 ## Setup / install
 - **Python**: 3.10 (per README)
@@ -37,6 +38,7 @@
 - **Edit dimensions (current)**: `empathy`, `vividness`, `certainty`
 - **Edit dimensions (preference)**: Prefer “straightforward / easy-to-label” dimensions over abstract ones.
 - **Dataset**: Added `prototype/backend/data/edits_2.jsonl` (dimensions: `empathy`, `politeness`, `positivity`)
+- **Prompt datasets**: Prompts should be **self-contained** (include the article/text/notes being referenced).
 
 ## Paper (parsed in `misc/paper.md`) → code grounding: what CoS is doing
 
